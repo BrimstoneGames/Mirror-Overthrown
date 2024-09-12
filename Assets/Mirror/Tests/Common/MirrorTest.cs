@@ -847,7 +847,7 @@ namespace Mirror.Tests
             // for the client objects.
             // otherwise this would only happen after AddPlayerForConnection.
             // but not all tests have a player.
-            NetworkClient.isSpawnFinished = true;
+            NetworkClient.IsSpawnFinished = true;
         }
 
         // fully connect client to local server & authenticate
@@ -889,7 +889,7 @@ namespace Mirror.Tests
             // for the client objects.
             // otherwise this would only happen after AddPlayerForConnection.
             // but not all tests have a player.
-            NetworkClient.isSpawnFinished = true;
+            NetworkClient.IsSpawnFinished = true;
         }
 
         // fully connect client to local server & authenticate & set read

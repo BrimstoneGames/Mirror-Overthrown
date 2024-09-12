@@ -46,8 +46,14 @@ namespace Mirror
         // for example, a game may run as client, set rigidbody.iskinematic=true,
         // then run as server, where .iskinematic isn't touched and remains at
         // the overwritten=true, even though the user set it to false originally.
-        public override void OnStopServer() => rb.isKinematic = wasKinematic;
-        public override void OnStopClient() => rb.isKinematic = wasKinematic;
+        public override void OnStopServer() {
+            if(rb != null)
+                rb.isKinematic = wasKinematic;
+        }
+        public override void OnStopClient() {
+            if(rb != null)
+                rb.isKinematic = wasKinematic;
+        }
 
         // overwriting Construct() and Apply() to set Rigidbody.MovePosition
         // would give more jittery movement.

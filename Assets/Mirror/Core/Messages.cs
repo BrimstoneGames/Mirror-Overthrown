@@ -80,9 +80,15 @@ namespace Mirror
         public bool isLocalPlayer;
     }
 
-    public struct ObjectSpawnStartedMessage : NetworkMessage {}
+    public struct ObjectSpawnStartedMessage : NetworkMessage {
+        public int estimatedBatchCount;
+    }
 
-    public struct ObjectSpawnFinishedMessage : NetworkMessage {}
+    public struct ObjectSpawnFinishedMessage : NetworkMessage { }
+
+    public struct FullObserverSpawnBatchSentMessage : NetworkMessage { }
+
+    public struct ReadyForSpawnBatchMessage : NetworkMessage { }
 
     public struct ObjectDestroyMessage : NetworkMessage
     {

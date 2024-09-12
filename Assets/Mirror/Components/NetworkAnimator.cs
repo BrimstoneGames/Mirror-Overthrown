@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -49,6 +50,8 @@ namespace Mirror
         int[] transitionHash;
         float[] layerWeight;
         double nextSendTime;
+
+        HashSet<int> triggerBuffer = new HashSet<int>();
 
         bool SendMessagesAllowed
         {
@@ -126,6 +129,11 @@ namespace Mirror
             }
 
             CheckSpeed();
+
+            foreach(int trigger in triggerBuffer)
+                SendTriggerMessageInternal(trigger);
+
+            triggerBuffer.Clear();
         }
 
         void CheckSpeed()
@@ -463,6 +471,11 @@ namespace Mirror
         /// <param name="hash">Hash id of trigger (from the Animator).</param>
         public void SetTrigger(int hash)
         {
+            HandleAnimTriggerMsg(hash);
+            triggerBuffer.Add(hash);
+        }
+
+        private void SendTriggerMessageInternal(int hash) {
             if (clientAuthority)
             {
                 if (!isClient)
@@ -479,9 +492,6 @@ namespace Mirror
 
                 if (isClient)
                     CmdOnAnimationTriggerServerMessage(hash);
-
-                // call on client right away
-                HandleAnimTriggerMsg(hash);
             }
             else
             {
@@ -491,7 +501,6 @@ namespace Mirror
                     return;
                 }
 
-                HandleAnimTriggerMsg(hash);
                 RpcOnAnimationTriggerClientMessage(hash);
             }
         }

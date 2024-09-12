@@ -130,6 +130,16 @@ namespace Mirror
         // capture full Unity update time from before Early- to after LateUpdate
         public static TimeSample fullUpdateDuration;
 
+        private const int maxServerActivationBatchSize = 256;
+        private const int maxServerSpawnBatchSize = 2048;
+        public static bool IsSpawningObjects { get; private set; }
+        public static int SpawnActionsCount { get; private set; }
+        public static int CompleteSpawnActionsCount { get; private set; }
+
+        // Set relatively low since spawn messages can take some time to process
+        private const int bufferedObserverSpawnMaxBatchSize = 256;
+        private static readonly Dictionary<int, bool> readyForSpawnBatchPerConnectionId = new Dictionary<int, bool>();
+
         /// <summary>Starts server and listens to incoming connections with max connections limit.</summary>
         public static void Listen(int maxConns)
         {
@@ -313,6 +323,7 @@ namespace Mirror
             RegisterHandler<NetworkPongMessage>(NetworkTime.OnServerPong, false);
             RegisterHandler<EntityStateMessage>(OnEntityStateMessage, true);
             RegisterHandler<TimeSnapshotMessage>(OnTimeSnapshotMessage, false); // unreliable may arrive before reliable authority went through
+            RegisterHandler<ReadyForSpawnBatchMessage>(OnClientReadyForSpawnBatch);
         }
 
         // remote calls ////////////////////////////////////////////////////////
@@ -1177,7 +1188,8 @@ namespace Mirror
             // controller.
             //
             // IMPORTANT: do this in AddPlayerForConnection & ReplacePlayerForConnection!
-            SpawnObserversForConnection(conn);
+            //SpawnObserversForConnection(conn);
+            SpawnObserversForConnectionBuffered(conn);
 
             //Debug.Log($"Replacing playerGameObject object netId:{player.GetComponent<NetworkIdentity>().netId} asset ID {player.GetComponent<NetworkIdentity>().assetId}");
 
@@ -1257,7 +1269,8 @@ namespace Mirror
 
             // client is ready to start spawning objects
             if (conn.identity != null)
-                SpawnObserversForConnection(conn);
+                //SpawnObserversForConnection(conn);
+                SpawnObserversForConnectionBuffered(conn);
         }
 
         static void SpawnObserversForConnection(NetworkConnectionToClient conn)
@@ -1325,6 +1338,71 @@ namespace Mirror
             // OnStartClient on each one (only after all were spawned, which
             // is how Unity's Start() function works too)
             conn.Send(new ObjectSpawnFinishedMessage());
+        }
+
+        static async void SpawnObserversForConnectionBuffered(NetworkConnectionToClient connection) {
+            // EDEN: This is our custom, buffered version adapted from SpawnObserversForConnection.
+            //       For in-depth comments on all the steps, view the original method, but it's pretty self-explanatory
+
+            if (spawned.Count < bufferedObserverSpawnMaxBatchSize) {
+                Debug.Log($"Sending connection {connection.connectionId} all objects to spawn ({spawned.Count}) with no buffering");
+                SpawnObserversForConnection(connection);
+                return;
+            }
+
+            if (!connection.isReady)
+                return;
+
+            connection.Send(new ObjectSpawnStartedMessage() { estimatedBatchCount = Mathf.CeilToInt(spawned.Count / bufferedObserverSpawnMaxBatchSize) });
+
+            NetworkIdentity[] spawnedCopy = spawned.Values.ToArray();
+
+            int sentInCurrentBatch = 0;
+            for (int i = 0; i < spawnedCopy.Length; i++) {
+                NetworkIdentity identity = spawnedCopy[i];
+
+                if (identity == null)
+                    // Since this is buffered and timesliced, the identity could have been destroyed by now
+                    continue;
+
+                if (!identity.gameObject.activeSelf)
+                    continue;
+
+                if (identity.visibility == Visibility.ForceHidden)
+                    continue;
+
+                bool shouldAddObserver = false;
+                if (identity.visibility == Visibility.ForceShown)
+                    shouldAddObserver = true;
+                else if (identity.visibility == Visibility.Default) {
+                    if (aoi == null || aoi.OnCheckObserver(identity, connection))
+                        shouldAddObserver = true;
+                }
+
+                if (shouldAddObserver) {
+                    identity.AddObserver(connection);
+
+                    if (++sentInCurrentBatch >= bufferedObserverSpawnMaxBatchSize) {
+                        Debug.Log($"Sent connection {connection.connectionId} a full batch of {bufferedObserverSpawnMaxBatchSize} objects to spawn");
+                        connection.Send(new FullObserverSpawnBatchSentMessage());
+                        readyForSpawnBatchPerConnectionId[connection.connectionId] = false;
+                        await new WaitUntil(() => readyForSpawnBatchPerConnectionId[connection.connectionId]);
+                        sentInCurrentBatch = 0;
+                    }
+                }
+            }
+
+            if (sentInCurrentBatch > 0)
+                Debug.Log($"Sent connection {connection.connectionId} a partial batch of {sentInCurrentBatch} objects to spawn");
+
+            readyForSpawnBatchPerConnectionId.Remove(connection.connectionId);
+
+            connection.Send(new ObjectSpawnFinishedMessage());
+        }
+
+        private static void OnClientReadyForSpawnBatch(NetworkConnectionToClient connection, ReadyForSpawnBatchMessage message) {
+            Debug.Log($"Connection {connection.connectionId} is ready for a new batch of objects to spawn");
+            readyForSpawnBatchPerConnectionId[connection.connectionId] = true;
         }
 
         /// <summary>Marks the client of the connection to be not-ready.</summary>
@@ -1500,6 +1578,64 @@ namespace Mirror
             }
 
             return true;
+        }
+
+        public static async void SpawnObjectsTimeSliced() {
+            // EDEN: This is our custom, time-sliced version adapted from SpawnObjects.
+            //       For in-depth comments on all the steps, view the original method
+
+            if (!active)
+                return;
+
+            IsSpawningObjects = true;
+
+            NetworkIdentity[] identities = Resources.FindObjectsOfTypeAll<NetworkIdentity>();
+            SpawnActionsCount = identities.Length * 2;
+
+            int objectsActivatedInBatch = 0;
+            CompleteSpawnActionsCount = 0;
+            foreach (NetworkIdentity identity in identities) {
+                if (identity == null)
+                    // Since this is time sliced, objects could be destroyed before we get to them
+                    continue;
+
+                if (Utils.IsSceneObject(identity) && identity.netId == 0)
+                    identity.gameObject.SetActive(true);
+
+                CompleteSpawnActionsCount++;
+                if (++objectsActivatedInBatch >= maxServerActivationBatchSize) {
+                    await new WaitForEndOfFrame();
+                    if (!active) {
+                        IsSpawningObjects = false;
+                        return;
+                    }
+                    objectsActivatedInBatch = 0;
+                }
+            }
+
+            int objectsSpawnedInBatch = 0;
+            foreach (NetworkIdentity identity in identities) {
+                if (identity == null)
+                    // Since this is time sliced, objects could be destroyed before we get to them
+                    continue;
+
+                if (Utils.IsSceneObject(identity) && identity.netId == 0 && ValidParent(identity))
+                    Spawn(identity.gameObject, identity.connectionToClient);
+
+                CompleteSpawnActionsCount++;
+                if (++objectsSpawnedInBatch >= maxServerSpawnBatchSize) {
+                    await new WaitForEndOfFrame();
+                    if (!active) {
+                        IsSpawningObjects = false;
+                        return;
+                    }
+                    objectsSpawnedInBatch = 0;
+                }
+            }
+
+            IsSpawningObjects = false;
+
+            return;
         }
 
         /// <summary>Spawns an object and also assigns Client Authority to the specified client.</summary>

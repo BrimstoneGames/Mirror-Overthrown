@@ -21,9 +21,9 @@ namespace Mirror
             // only while client is active
             if (!NetworkClient.active) return;
 
-            // show stats in bottom right corner, right aligned
+            // show stats in top right corner, right aligned
             GUI.color = color;
-            Rect rect = new Rect(Screen.width - width - padding, Screen.height - height - padding, width, height);
+            Rect rect = new Rect(Screen.width - width - padding, padding, width, height);
             GUILayout.BeginArea(rect);
             GUIStyle style = GUI.skin.GetStyle("Label");
             style.alignment = TextAnchor.MiddleRight;

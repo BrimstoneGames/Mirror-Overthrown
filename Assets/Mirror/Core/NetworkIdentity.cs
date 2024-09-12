@@ -190,7 +190,8 @@ namespace Mirror
         NetworkConnectionToClient _connectionToClient;
 
         // get all NetworkBehaviour components
-        public NetworkBehaviour[] NetworkBehaviours { get; private set; }
+        [field: SerializeField] public NetworkBehaviour[] NetworkBehaviours { get; private set; }
+        [field: SerializeField] public long RemovedBehaviours { get; private set; }
 
         // to save bandwidth, we send one 64 bit dirty mask
         // instead of 1 byte index per dirty component.
@@ -298,12 +299,13 @@ namespace Mirror
 
         // hasSpawned should always be false before runtime
         [SerializeField, HideInInspector] bool hasSpawned;
+        public bool HasSpawned => hasSpawned;
         public bool SpawnedFromInstantiate { get; private set; }
 
         // NetworkBehaviour components are initialized in Awake once.
         // Changing them at runtime would get client & server out of sync.
         // BUT internal so tests can add them after creating the NetworkIdentity
-        internal void InitializeNetworkBehaviours()
+        public void InitializeNetworkBehaviours()
         {
             // Get all NetworkBehaviour components, including children.
             // Some users need NetworkTransform on child bones, etc.
@@ -311,6 +313,7 @@ namespace Mirror
             // => Never null. GetComponents returns [] if none found.
             // => Include inactive. We need all child components.
             NetworkBehaviours = GetComponentsInChildren<NetworkBehaviour>(true);
+            RemovedBehaviours = 0;
             ValidateComponents();
 
             // initialize each one
@@ -318,8 +321,20 @@ namespace Mirror
             {
                 NetworkBehaviour component = NetworkBehaviours[i];
                 component.netIdentity = this;
+                component.netIdentityWasSet = true;
                 component.ComponentIndex = (byte)i;
             }
+        }
+
+        public void MarkBehaviourRemoved(NetworkBehaviour behaviour) {
+            if(NetworkBehaviours[behaviour.ComponentIndex] != behaviour)
+                throw new System.ArgumentException("NetworkBehaviour " + behaviour.GetType() + " doesn't exist on NetworkIdentity " + gameObject.name);
+
+            RemovedBehaviours |= 1L << behaviour.ComponentIndex;
+        }
+
+        bool IsBehaviourRemoved(byte index) {
+            return (RemovedBehaviours & (1L << index)) != 0;
         }
 
         void ValidateComponents()
@@ -854,6 +869,9 @@ namespace Mirror
             NetworkBehaviour[] components = NetworkBehaviours;
             for (int i = 0; i < components.Length; ++i)
             {
+                if(IsBehaviourRemoved((byte)i))
+                    continue;
+
                 NetworkBehaviour component = components[i];
                 ulong nthBit = (1u << i);
 

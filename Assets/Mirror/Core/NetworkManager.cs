@@ -1201,6 +1201,7 @@ namespace Mirror
             // proceed with the login handshake by calling OnServerConnect
             if (networkSceneName != "" && networkSceneName != offlineScene)
             {
+                Debug.Log("Send change scene");
                 SceneMessage msg = new SceneMessage()
                 {
                     sceneName = networkSceneName
@@ -1355,7 +1356,7 @@ namespace Mirror
 
         void OnClientSceneInternal(SceneMessage msg)
         {
-            //Debug.Log("NetworkManager.OnClientSceneInternal");
+            Debug.Log("NetworkManager.OnClientSceneInternal");
 
             // This needs to run for host client too. NetworkServer.active is checked there
             if (NetworkClient.isConnected)

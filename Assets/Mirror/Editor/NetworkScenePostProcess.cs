@@ -11,6 +11,9 @@ namespace Mirror
         [PostProcessScene]
         public static void OnPostProcessScene()
         {
+            if(Application.isPlaying)
+                return;
+
             // find all NetworkIdentities in all scenes
             // => can't limit it to GetActiveScene() because that wouldn't work
             //    for additive scene loads (the additively loaded scene is never

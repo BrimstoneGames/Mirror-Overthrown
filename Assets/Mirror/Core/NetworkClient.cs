@@ -107,7 +107,11 @@ namespace Mirror
 
         // spawning
         // internal for tests
-        internal static bool isSpawnFinished;
+        // EDEN: I've hijacked this, it's no longer just for testing
+        public static bool IsSpawnFinished { get; internal set; }
+        internal static int spawnBatchCount;
+        public static int EstimatedTotalSpawnBatches { get; private set; }
+        public static int SpawnedBatches { get; private set; }
 
         // Disabled scene objects that can be spawned again, by sceneId.
         internal static readonly Dictionary<ulong, NetworkIdentity> spawnableObjects =
@@ -499,6 +503,7 @@ namespace Mirror
                 RegisterHandler<ObjectHideMessage>(OnHostClientObjectHide);
                 RegisterHandler<NetworkPongMessage>(_ => { }, false);
                 RegisterHandler<SpawnMessage>(OnHostClientSpawn);
+                RegisterHandler<FullObserverSpawnBatchSentMessage>(OnFullObjectSpawnBatchSent);
                 // host mode doesn't need spawning
                 RegisterHandler<ObjectSpawnStartedMessage>(_ => { });
                 // host mode doesn't need spawning
@@ -513,6 +518,7 @@ namespace Mirror
                 RegisterHandler<NetworkPongMessage>(NetworkTime.OnClientPong, false);
                 RegisterHandler<NetworkPingMessage>(NetworkTime.OnClientPing, false);
                 RegisterHandler<SpawnMessage>(OnSpawn);
+                RegisterHandler<FullObserverSpawnBatchSentMessage>(OnFullObjectSpawnBatchSent);
                 RegisterHandler<ObjectSpawnStartedMessage>(OnObjectSpawnStarted);
                 RegisterHandler<ObjectSpawnFinishedMessage>(OnObjectSpawnFinished);
                 RegisterHandler<EntityStateMessage>(OnEntityStateMessage);
@@ -1173,7 +1179,7 @@ namespace Mirror
             // this only happens once though.
             // for all future spawns, we need to call OnStartClient/LocalPlayer
             // here immediately since there won't be another OnObjectSpawnFinished.
-            if (isSpawnFinished)
+            if (IsSpawnFinished)
             {
                 InvokeIdentityCallbacks(identity);
             }
@@ -1311,15 +1317,18 @@ namespace Mirror
             }
         }
 
-        internal static void OnObjectSpawnStarted(ObjectSpawnStartedMessage _)
+        internal static void OnObjectSpawnStarted(ObjectSpawnStartedMessage message)
         {
             // Debug.Log("SpawnStarted");
             PrepareToSpawnSceneObjects();
-            isSpawnFinished = false;
+            IsSpawnFinished = false;
+            EstimatedTotalSpawnBatches = message.estimatedBatchCount;
         }
 
         internal static void OnObjectSpawnFinished(ObjectSpawnFinishedMessage _)
         {
+            Debug.Log($"Received confirmation of all object spawn messages being sent after spawning {spawnBatchCount} objects");
+
             // paul: Initialize the objects in the same order as they were
             // initialized in the server. This is important if spawned objects
             // use data from scene objects
@@ -1333,7 +1342,7 @@ namespace Mirror
                 }
                 else Debug.LogWarning("Found null entry in NetworkClient.spawned. This is unexpected. Was the NetworkIdentity not destroyed properly?");
             }
-            isSpawnFinished = true;
+            IsSpawnFinished = true;
         }
 
         // host mode callbacks /////////////////////////////////////////////////
@@ -1449,13 +1458,22 @@ namespace Mirror
 
         internal static void OnObjectDestroy(ObjectDestroyMessage message) => DestroyObject(message.netId);
 
-        internal static void OnSpawn(SpawnMessage message)
-        {
+        internal static void OnSpawn(SpawnMessage spawn) {
+            if (!IsSpawnFinished)
+                spawnBatchCount++;
+            
             // Debug.Log($"Client spawn handler instantiating netId={msg.netId} assetID={msg.assetId} sceneId={msg.sceneId:X} pos={msg.position}");
-            if (FindOrSpawnObject(message, out NetworkIdentity identity))
-            {
-                ApplySpawnPayload(identity, message);
+            if (FindOrSpawnObject(spawn, out NetworkIdentity identity)) {
+                ApplySpawnPayload(identity, spawn);
             }
+        }
+
+        internal static void OnFullObjectSpawnBatchSent(FullObserverSpawnBatchSentMessage message) {
+            // Since this should only be parsed after the full batch of spawn messages, those should have already been applied and the client should be ready for a new batch
+            Debug.Log($"Received confirmation of full object spawn batch after spawning {spawnBatchCount} objects");
+            spawnBatchCount = 0;
+            SpawnedBatches++;
+            Send(new ReadyForSpawnBatchMessage());
         }
 
         internal static void OnChangeOwner(ChangeOwnerMessage message)
@@ -1811,7 +1829,7 @@ namespace Mirror
             connection = null;
             localPlayer = null;
             ready = false;
-            isSpawnFinished = false;
+            IsSpawnFinished = false;
             isLoadingScene = false;
             lastSendTime = 0;
 

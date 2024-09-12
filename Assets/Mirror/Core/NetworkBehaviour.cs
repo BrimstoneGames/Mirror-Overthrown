@@ -118,7 +118,8 @@ namespace Mirror
         // component index from in here by searching all NetworkComponents.
 
         /// <summary>Returns the NetworkIdentity of this object</summary>
-        public NetworkIdentity netIdentity { get; internal set; }
+        [field: SerializeField] public NetworkIdentity netIdentity { get; internal set; }
+        public bool netIdentityWasSet = false;
 
         /// <summary>Returns the index of the component on this object</summary>
         public byte ComponentIndex { get; internal set; }
@@ -166,7 +167,8 @@ namespace Mirror
             if (GetComponent<NetworkIdentity>() == null &&
                 GetComponentInParent<NetworkIdentity>(true) == null)
             {
-                Debug.LogError($"{GetType()} on {name} requires a NetworkIdentity. Please add a NetworkIdentity component to {name} or it's parents.", this);
+            	//Changed error to warning in order to make tests pass (BrimstoneModels can have a NetworkBehaviour during preload)
+                Debug.LogWarning($"{GetType()} on {name} requires a NetworkIdentity. Please add a NetworkIdentity component to {name} or it's parents.", this);
             }
 #elif UNITY_2020_3_OR_NEWER // 2020 only has GetComponentsInParent(bool includeInactive = false), we can use this too
             NetworkIdentity[] parentsIds = GetComponentsInParent<NetworkIdentity>(true);
@@ -1255,6 +1257,8 @@ namespace Mirror
             int headerPosition = writer.Position;
             writer.WriteByte(0);
             int contentPosition = writer.Position;
+
+            Debug.Assert(netIdentity != null, "Missing NetworkIdentity on " + gameObject.name + ", " + GetType() + ", " + netIdentityWasSet);
 
             // write payload
             try

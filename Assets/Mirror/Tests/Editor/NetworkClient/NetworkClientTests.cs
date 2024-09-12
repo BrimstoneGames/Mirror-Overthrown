@@ -140,7 +140,7 @@ namespace Mirror.Tests.NetworkClients
             Assert.That(NetworkClient.localPlayer, Is.Null);
 
             Assert.That(NetworkClient.ready, Is.False);
-            Assert.That(NetworkClient.isSpawnFinished, Is.False);
+            Assert.That(NetworkClient.IsSpawnFinished, Is.False);
             Assert.That(NetworkClient.isLoadingScene, Is.False);
 
             Assert.That(NetworkClient.OnConnectedEvent, Is.Null);
