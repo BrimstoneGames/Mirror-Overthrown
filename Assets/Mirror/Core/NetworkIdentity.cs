@@ -192,6 +192,9 @@ namespace Mirror
         // get all NetworkBehaviour components
         [field: SerializeField] public NetworkBehaviour[] NetworkBehaviours { get; private set; }
         [field: SerializeField] public long RemovedBehaviours { get; private set; }
+        
+        /// <summary>BRIMSTONE ADDITION</summary>
+        [field: SerializeField] public NetworkCallbackBehaviour[] NetworkCallbackBehaviours { get; private set; }
 
         // to save bandwidth, we send one 64 bit dirty mask
         // instead of 1 byte index per dirty component.
@@ -324,6 +327,11 @@ namespace Mirror
                 component.netIdentityWasSet = true;
                 component.ComponentIndex = (byte)i;
             }
+
+            // BRIMSTONE ADDITION
+            NetworkCallbackBehaviours = GetComponentsInChildren<NetworkCallbackBehaviour>(true);
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours)
+                component.netIdentity = this;
         }
 
         public void MarkBehaviourRemoved(NetworkBehaviour behaviour) {
@@ -702,6 +710,8 @@ namespace Mirror
             // after Destroy. [Credits: BigBoxVR/R.S.]
             // TODO report this to Unity!
             this.NetworkBehaviours = null;
+            // BRIMSTONE ADDITION
+            NetworkCallbackBehaviours = null;
         }
 
         internal void OnStartServer()
@@ -722,6 +732,16 @@ namespace Mirror
                     Debug.LogException(e, comp);
                 }
             }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStartServer();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
+                }
+            }
         }
 
         internal void OnStopServer()
@@ -740,6 +760,16 @@ namespace Mirror
                 catch (Exception e)
                 {
                     Debug.LogException(e, comp);
+                }
+            }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStopServer();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
                 }
             }
         }
@@ -768,6 +798,16 @@ namespace Mirror
                     Debug.LogException(e, comp);
                 }
             }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStartClient();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
+                }
+            }
         }
 
         internal void OnStopClient()
@@ -790,6 +830,16 @@ namespace Mirror
                 catch (Exception e)
                 {
                     Debug.LogException(e, comp);
+                }
+            }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStopClient();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
                 }
             }
         }
@@ -837,6 +887,16 @@ namespace Mirror
                     Debug.LogException(e, comp);
                 }
             }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStartLocalPlayer();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
+                }
+            }
         }
 
         internal void OnStopLocalPlayer()
@@ -855,6 +915,16 @@ namespace Mirror
                 catch (Exception e)
                 {
                     Debug.LogException(e, comp);
+                }
+            }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStopLocalPlayer();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
                 }
             }
         }
@@ -1386,6 +1456,16 @@ namespace Mirror
                     Debug.LogException(e, comp);
                 }
             }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStartAuthority();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
+                }
+            }
         }
 
         internal void OnStopAuthority()
@@ -1404,6 +1484,16 @@ namespace Mirror
                 catch (Exception e)
                 {
                     Debug.LogException(e, comp);
+                }
+            }
+
+            // BRIMSTONE ADDITION
+            foreach (NetworkCallbackBehaviour component in NetworkCallbackBehaviours) {
+                try {
+                    component.OnStopAuthority();
+                }
+                catch (Exception e) {
+                    Debug.LogException(e, component);
                 }
             }
         }
