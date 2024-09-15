@@ -30,6 +30,9 @@ namespace Mirror
         protected Changed cachedChangedComparison;
         protected bool hasSentUnchangedPosition;
 
+        // BRIMSTONE ADDITION. Useful for players, since Y is the most likely coordinated to stay unchanged for a while, which could preserve a desync if it gets through the snapshot interpolation
+        [HideInInspector] public bool forceNextPositionYSync;
+
         // update //////////////////////////////////////////////////////////////
         // Update applies interpolation
         void Update()
@@ -306,13 +309,15 @@ namespace Mirror
 
             if (syncPosition)
             {
-                bool positionChanged = Vector3.SqrMagnitude(lastSnapshot.position - currentSnapshot.position) > positionSensitivity * positionSensitivity;
+                // BRIMSTONE ADDITION: forceNextPositionYSync
+                bool positionChanged = forceNextPositionYSync || Vector3.SqrMagnitude(lastSnapshot.position - currentSnapshot.position) > positionSensitivity * positionSensitivity;
                 if (positionChanged)
                 {
                     if (Mathf.Abs(lastSnapshot.position.x - currentSnapshot.position.x) > positionSensitivity) change |= Changed.PosX;
-                    if (Mathf.Abs(lastSnapshot.position.y - currentSnapshot.position.y) > positionSensitivity) change |= Changed.PosY;
+                    if (forceNextPositionYSync || Mathf.Abs(lastSnapshot.position.y - currentSnapshot.position.y) > positionSensitivity) change |= Changed.PosY;
                     if (Mathf.Abs(lastSnapshot.position.z - currentSnapshot.position.z) > positionSensitivity) change |= Changed.PosZ;
                 }
+                forceNextPositionYSync = false;
             }
 
             if (syncRotation)
